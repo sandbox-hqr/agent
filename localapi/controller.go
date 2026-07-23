@@ -10,7 +10,7 @@ import (
 
 	"github.com/awesome-goose/goose/io/output"
 	"github.com/awesome-goose/goose/types"
-	"github.com/sandbox-hq/agent/core"
+	"github.com/sandbox-hqr/agent/core"
 )
 
 type Controller struct {

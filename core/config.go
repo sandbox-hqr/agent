@@ -20,7 +20,7 @@ type Config struct {
 	RetryBackoffMin     time.Duration
 	RetryBackoffMax     time.Duration
 	RTBBaseURL          string // defaults to ControlPlaneBaseURL — path-routed, same "cloud" endpoint
-	DriverType          string // firecracker | cloud-hypervisor | mock
+	DriverType          string // firecracker | cloud-hypervisor | container | mock
 	Labels              map[string]string
 	LocalAPIBindAddr    string
 	LocalAPIEnablePprof bool

@@ -27,9 +27,10 @@ func (f *Firecracker) Name() string { return "firecracker" }
 
 // Supports returns false whenever GPUs are requested — Firecracker has no
 // PCI passthrough, a hard hardware constraint, not a policy choice
-// (draft/micro-machine.md §4).
+// (draft/micro-machine.md §4) — and false for spec.Type == "container",
+// since Firecracker only ever boots a microVM.
 func (f *Firecracker) Supports(spec VMSpec) bool {
-	return spec.Resources.GPUs == 0
+	return spec.Resources.GPUs == 0 && spec.Type != "container"
 }
 
 func (f *Firecracker) Create(ctx context.Context, spec VMSpec) (*Instance, error) {

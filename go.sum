@@ -1,3 +1,5 @@
+github.com/awesome-goose/goose v0.0.13 h1:PVHs86Z5L7BcC0DxEhG4oepCsGl/0GHNGKV9JAjbwmA=
+github.com/awesome-goose/goose v0.0.13/go.mod h1:Qa39myfhU0py7Q4eDkX2nvR6pOALNAMmS6oCJWuPwQM=
 github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
 github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
 github.com/hashicorp/yamux v0.1.2 h1:XtB8kyFOyHXYVFnwT5C3+Bdo8gArse7j2AQ0DA0Uey8=

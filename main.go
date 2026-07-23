@@ -4,7 +4,7 @@
 // it (install/uninstall/start/stop/status) via goose's own CLI platform.
 package main
 
-import "github.com/sandbox-hq/agent/cli"
+import "github.com/sandbox-hqr/agent/cli"
 
 func main() {
 	cli.Run()

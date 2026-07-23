@@ -1,9 +1,9 @@
-module github.com/sandbox-hq/agent
+module github.com/sandbox-hqr/agent
 
 go 1.25.3
 
 require (
-	github.com/awesome-goose/goose v0.0.12
+	github.com/awesome-goose/goose v0.0.13
 	github.com/hashicorp/yamux v0.1.2
 	github.com/kardianos/service v1.3.0
 )
@@ -14,5 +14,3 @@ require (
 	golang.org/x/text v0.21.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-replace github.com/awesome-goose/goose => ../../awesome-goose/goose

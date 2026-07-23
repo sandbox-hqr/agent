@@ -21,7 +21,10 @@ func NewCloudHypervisor() *CloudHypervisor { return &CloudHypervisor{} }
 func (c *CloudHypervisor) Name() string { return "cloud-hypervisor" }
 
 func (c *CloudHypervisor) Supports(spec VMSpec) bool {
-	return true // fractional GPU (MIG) selection would be decided here — see §4's GPU sharing note
+	// fractional GPU (MIG) selection would be decided here — see §4's GPU
+	// sharing note. Cloud Hypervisor, like Firecracker, only boots a
+	// microVM, so it rejects spec.Type == "container".
+	return spec.Type != "container"
 }
 
 func (c *CloudHypervisor) Create(ctx context.Context, spec VMSpec) (*Instance, error) {

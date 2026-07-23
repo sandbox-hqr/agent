@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/sandbox-hq/agent/driver"
+	"github.com/sandbox-hqr/agent/driver"
 )
 
 // probeCapacity probes local vCPU/RAM/disk at startup (draft/

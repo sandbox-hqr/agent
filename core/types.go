@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/sandbox-hq/agent/driver"
+	"github.com/sandbox-hqr/agent/driver"
 )
 
 // AgentCredentials is Enroll's result — the bearer token is persisted

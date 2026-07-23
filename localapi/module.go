@@ -3,7 +3,7 @@ package localapi
 import (
 	"github.com/awesome-goose/goose/modules/router"
 	"github.com/awesome-goose/goose/types"
-	"github.com/sandbox-hq/agent/core"
+	"github.com/sandbox-hqr/agent/core"
 )
 
 // Module wraps an already-constructed *core.Agent (built in main.go) as a

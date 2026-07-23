@@ -25,6 +25,7 @@ type Resources struct {
 type VMSpec struct {
 	SpaceID      string    `json:"space_id"`
 	Image        string    `json:"image"`
+	Type         string    `json:"type"` // vm | container — empty is treated as "vm" by VM-only drivers, for backward compatibility with callers that predate this field
 	Resources    Resources `json:"resources"`
 	SSHPublicKey string    `json:"ssh_public_key"`
 	EnvID        string    `json:"env_id"` // keys the per-tenant tap/subnet, draft/micro-machine.md §5

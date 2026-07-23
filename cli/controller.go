@@ -11,14 +11,8 @@ import (
 	"github.com/awesome-goose/goose/types"
 	kservice "github.com/kardianos/service"
 
-	"github.com/sandbox-hq/agent/core"
+	"github.com/sandbox-hqr/agent/core"
 )
-
-// exitCode is read by dispatch.go's runCLI after goose.Start returns, to
-// set the real process exit code — see ~/Projects/awesome-goose/goose/
-// BUGS.md #4: a CLI controller's returned Output.Code()/WithExitCode()
-// never reaches the actual os.Exit status on its own.
-var exitCode int
 
 type EmptyDto struct{}
 
@@ -113,16 +107,16 @@ func (c *Controller) Status(_ *EmptyDto) types.Output {
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != http.StatusOK {
-		exitCode = 1
-	}
-	return output.Box("sandbox-agent status", []string{
+	box := output.Box("sandbox-agent status", []string{
 		fmt.Sprintf("HTTP %d", resp.StatusCode),
 		string(body),
 	})
+	if resp.StatusCode != http.StatusOK {
+		return box.WithExitCode(1)
+	}
+	return box
 }
 
 func fail(message string) types.Output {
-	exitCode = 1
 	return output.ConsoleError(message).WithExitCode(1)
 }

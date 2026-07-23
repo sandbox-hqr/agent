@@ -8,17 +8,12 @@ import (
 	"os"
 
 	"github.com/awesome-goose/goose"
-	gooselog "github.com/awesome-goose/goose/log"
-	gooselogformatters "github.com/awesome-goose/goose/log/formatters"
-	gooselogmodifiers "github.com/awesome-goose/goose/log/modifiers"
-	gooselogprocessors "github.com/awesome-goose/goose/log/processors"
 	gooseapi "github.com/awesome-goose/goose/platforms/api"
-	goosetypes "github.com/awesome-goose/goose/types"
 	kservice "github.com/kardianos/service"
 
-	"github.com/sandbox-hq/agent/core"
-	"github.com/sandbox-hq/agent/driver"
-	"github.com/sandbox-hq/agent/localapi"
+	"github.com/sandbox-hqr/agent/core"
+	"github.com/sandbox-hqr/agent/driver"
+	"github.com/sandbox-hqr/agent/localapi"
 )
 
 const (
@@ -107,42 +102,16 @@ func runLocalAPI(ctx context.Context, cfg *core.Config, agent *core.Agent) error
 	platform := gooseapi.NewPlatform(gooseapi.WithName("sandbox-agent-localapi"), gooseapi.WithHost(host), gooseapi.WithPort(port))
 	root := localapi.NewModule(agent)
 
-	initializers := []func(container goosetypes.Container) error{logInitializer()}
-
-	stop, err := goose.Start(goose.API(platform, root, initializers))
+	// A custom Log initializer used to be required here (goose's own
+	// default registration bound the wrong type, awesome-goose/goose/
+	// BUGS.md #1) — fixed as of goose v0.0.13, so no initializers are
+	// needed at all now.
+	stop, err := goose.Start(goose.API(platform, root, nil))
 	if err != nil {
 		return err
 	}
 	<-ctx.Done()
 	return stop()
-}
-
-// logInitializer works around a real bug in awesome-goose/goose's default
-// services chain (core/services.go registers the logger-slice producer
-// under the named log.AppLoggers, but the types.Log constructor asks for
-// the unnamed []*log.Logger — different reflect.Types, so DI can never
-// resolve it and every goose app fails to boot on default logging). Left
-// unfixed in the framework per an explicit decision — see
-// ~/Projects/awesome-goose/goose/BUGS.md #1 — so every goose instance in
-// this codebase supplies its own Log initializer instead.
-func logInitializer() func(goosetypes.Container) error {
-	return func(container goosetypes.Container) error {
-		return container.Register(func() goosetypes.Log {
-			return gooselog.NewLog(
-				gooselog.AppLogChannel("std"),
-				gooselog.NewLogger(
-					[]goosetypes.Modifier{
-						gooselogmodifiers.NewUUID(),
-						gooselogmodifiers.NewColorTagsModifier(),
-						gooselogmodifiers.NewSystemInfo(),
-						gooselogmodifiers.NewStackTrace(),
-					},
-					gooselogformatters.NewJSON(),
-					gooselogprocessors.NewConsole(),
-				),
-			)
-		}, "", true)
-	}
 }
 
 func buildDriver(driverType string) driver.Driver {
@@ -151,6 +120,8 @@ func buildDriver(driverType string) driver.Driver {
 		return driver.NewFirecracker()
 	case "cloud-hypervisor":
 		return driver.NewCloudHypervisor()
+	case "container":
+		return driver.NewContainer()
 	default:
 		return driver.NewMock()
 	}
