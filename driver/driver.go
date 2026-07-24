@@ -11,13 +11,18 @@ import "context"
 // Resources mirrors gox-apps/libs/scheduler/nodes.Resources — duplicated
 // here rather than imported so the agent binary has zero dependency on the
 // scheduler's Go module (it only ever talks to it over HTTP, per draft/
-// micro-machine.md §6's SchedulerClient interface).
+// micro-machine.md §6's SchedulerClient interface). JSON tags must match
+// gox-apps/libs/fleet/nodes.Resources exactly (camelCase, not snake_case)
+// — this crosses the wire in both directions (Enroll/Heartbeat capacity
+// reports, and the resources embedded in a create_space Command's
+// VMSpec), and a tag mismatch silently zeros out MemMB/DiskGB/GPUModel on
+// whichever side decodes it rather than erroring (SANDBOX.md §21).
 type Resources struct {
 	VCPUs    int    `json:"vcpus"`
-	MemMB    int    `json:"mem_mb"`
-	DiskGB   int    `json:"disk_gb"`
+	MemMB    int    `json:"memMb"`
+	DiskGB   int    `json:"diskGb"`
 	GPUs     int    `json:"gpus"`
-	GPUModel string `json:"gpu_model"`
+	GPUModel string `json:"gpuModel"`
 }
 
 // VMSpec is what a create_space Command's payload decodes into — enough
