@@ -23,10 +23,26 @@ import (
 // VMSpec.Image (neither driver resolves Image into a real filesystem
 // anywhere in this codebase yet; a real registry-pull step is a shared
 // follow-up for both, not specific to this driver).
+//
+// HostNetwork (default off) is a deliberate, narrow stopgap for exposing a
+// port out of a container Space at all: this codebase has no per-Space
+// networking of any kind yet, for either driver — no tap/veth, no bridge,
+// no IPAM (draft/micro-machine.md §5's tap/subnet allocation was never
+// wired up anywhere, per §20/§21's own notes). Without it, a container's
+// network namespace is fully isolated and nothing on the host can reach a
+// port inside it, so exports.ExportService (which dials Space.InternalIP
+// from the agent's own host network namespace, not from inside any guest)
+// would have nothing reachable to route to. HostNetwork drops the
+// container's network-namespace isolation so its listening ports are
+// directly reachable at 127.0.0.1 on the host — a real isolation
+// trade-off, not free, so it stays opt-in via
+// SANDBOX_AGENT_CONTAINER_HOST_NETWORK rather than becoming the default.
 type Container struct {
 	RuncPath    string
 	BusyboxPath string
 	StateDir    string
+	HostNetwork bool
+	AppPort     int
 }
 
 func NewContainer() *Container {
@@ -34,6 +50,8 @@ func NewContainer() *Container {
 		RuncPath:    envDefault("SANDBOX_AGENT_RUNC_BIN", "runc"),
 		BusyboxPath: envDefault("SANDBOX_AGENT_CONTAINER_BUSYBOX", "/bin/busybox"),
 		StateDir:    envDefault("SANDBOX_AGENT_CONTAINER_STATE_DIR", "/var/lib/sandbox-agent/container"),
+		HostNetwork: envDefault("SANDBOX_AGENT_CONTAINER_HOST_NETWORK", "false") == "true",
+		AppPort:     envIntDefault("SANDBOX_AGENT_CONTAINER_APP_PORT", 8091),
 	}
 }
 
@@ -64,12 +82,25 @@ func (c *Container) Create(ctx context.Context, spec VMSpec) (*Instance, error) 
 		return nil, fmt.Errorf("container driver: chmod busybox: %w", err)
 	}
 
+	// A static page busybox's httpd applet serves — this is what a
+	// port-exposure test actually hits through the tunnel, not just a
+	// process that stays alive (that was §21's bar; exposing a port needs
+	// something listening and answering).
+	rootfsWWW := filepath.Join(bundle, "rootfs", "www")
+	if err := os.MkdirAll(rootfsWWW, 0755); err != nil {
+		return nil, fmt.Errorf("container driver: create www dir: %w", err)
+	}
+	page := fmt.Sprintf("sandbox-container-http-ok space_id=%s\n", spec.SpaceID)
+	if err := os.WriteFile(filepath.Join(rootfsWWW, "index.html"), []byte(page), 0644); err != nil {
+		return nil, fmt.Errorf("container driver: write index page: %w", err)
+	}
+
 	if out, err := exec.CommandContext(ctx, c.RuncPath, "spec", "-b", bundle).CombinedOutput(); err != nil {
 		return nil, fmt.Errorf("container driver: runc spec: %w: %s", err, out)
 	}
 
 	configPath := filepath.Join(bundle, "config.json")
-	if err := patchOCIConfig(configPath, spec); err != nil {
+	if err := c.patchOCIConfig(configPath, spec); err != nil {
 		return nil, fmt.Errorf("container driver: patch OCI config: %w", err)
 	}
 
@@ -87,15 +118,24 @@ func (c *Container) Create(ctx context.Context, spec VMSpec) (*Instance, error) 
 		return nil, fmt.Errorf("container driver: runc run: %w", err)
 	}
 
-	return &Instance{ID: spec.SpaceID}, nil
+	inst := &Instance{ID: spec.SpaceID}
+	if c.HostNetwork {
+		// Accurate, not aspirational: with the network namespace shared
+		// (below), the container's listening port really is reachable at
+		// 127.0.0.1 on the host — this is what lets
+		// exports.ExportService's Space.InternalIP actually resolve to
+		// something dialable.
+		inst.IP = "127.0.0.1"
+	}
+	return inst, nil
 }
 
-// patchOCIConfig rewrites just the two fields this driver cares about,
-// leaving everything else `runc spec` generated (namespaces, mounts,
-// capabilities, cgroup path) untouched — round-tripping through
-// map[string]any rather than a hand-maintained OCI struct so an unknown
-// field never gets silently dropped.
-func patchOCIConfig(path string, spec VMSpec) error {
+// patchOCIConfig rewrites just the fields this driver cares about, leaving
+// everything else `runc spec` generated (mounts, capabilities, cgroup
+// path) untouched — round-tripping through map[string]any rather than a
+// hand-maintained OCI struct so an unknown field never gets silently
+// dropped.
+func (c *Container) patchOCIConfig(path string, spec VMSpec) error {
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return err
@@ -111,8 +151,13 @@ func patchOCIConfig(path string, spec VMSpec) error {
 	}
 	proc["terminal"] = false
 	proc["args"] = []string{
-		"/bin/busybox", "sh", "-c",
-		fmt.Sprintf("echo sandbox-container-alive space_id=%s; sleep 300", spec.SpaceID),
+		"/bin/busybox", "httpd", "-f", "-p", fmt.Sprintf("127.0.0.1:%d", c.AppPort), "-h", "/www",
+	}
+
+	if c.HostNetwork {
+		if err := stripNetworkNamespace(cfg); err != nil {
+			return err
+		}
 	}
 
 	out, err := json.MarshalIndent(cfg, "", "  ")
@@ -120,6 +165,31 @@ func patchOCIConfig(path string, spec VMSpec) error {
 		return err
 	}
 	return os.WriteFile(path, out, 0644)
+}
+
+// stripNetworkNamespace removes the "network" entry from
+// linux.namespaces, so the container shares the host's network stack
+// instead of getting its own isolated (and, absent any tap/veth/bridge
+// setup this codebase doesn't have, completely unreachable) one.
+func stripNetworkNamespace(cfg map[string]any) error {
+	linux, ok := cfg["linux"].(map[string]any)
+	if !ok {
+		return fmt.Errorf("unexpected OCI config shape: no linux object")
+	}
+	namespaces, ok := linux["namespaces"].([]any)
+	if !ok {
+		return fmt.Errorf("unexpected OCI config shape: no linux.namespaces array")
+	}
+	kept := namespaces[:0]
+	for _, ns := range namespaces {
+		nsMap, ok := ns.(map[string]any)
+		if ok && nsMap["type"] == "network" {
+			continue
+		}
+		kept = append(kept, ns)
+	}
+	linux["namespaces"] = kept
+	return nil
 }
 
 func (c *Container) Delete(ctx context.Context, id string) error {
