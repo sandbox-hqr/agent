@@ -1,0 +1,109 @@
+name: Release
+
+# Builds the `agent` CLI/daemon binary for all supported platforms and
+# publishes them as assets on a GitHub Release.
+#
+# Trigger with either:
+#   - `git tag vX.Y.Z && git push origin vX.Y.Z`
+#   - the "Run workflow" button (workflow_dispatch), supplying a tag name
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (must already exist), e.g. v0.1.0"
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  BINARY_NAME: agent
+
+jobs:
+  build:
+    name: build (${{ matrix.goos }}/${{ matrix.goarch }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          ext=""
+          if [ "${{ matrix.goos }}" = "windows" ]; then ext=".exe"; fi
+          go build -trimpath -ldflags="-s -w" -o "dist/${BINARY_NAME}${ext}" .
+
+      - name: Package
+        run: |
+          set -euo pipefail
+          cd dist
+          pkg="${BINARY_NAME}-${{ matrix.goos }}-${{ matrix.goarch }}"
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            zip -j "${pkg}.zip" "${BINARY_NAME}.exe"
+            rm "${BINARY_NAME}.exe"
+          else
+            tar -czf "${pkg}.tar.gz" "${BINARY_NAME}"
+            rm "${BINARY_NAME}"
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BINARY_NAME }}-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/*
+          retention-days: 7
+
+  release:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum * > checksums.txt
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          files: dist/*
+          generate_release_notes: true

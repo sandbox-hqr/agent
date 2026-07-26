@@ -58,9 +58,9 @@ type InstanceState struct {
 // actual-usage report — cross-checked against the scheduler's own
 // accounting, never trusted from the guest (draft/micro-machine.md §4, §9).
 type InstanceStats struct {
-	CPUPercent    float64 `json:"cpu_percent"`
-	MemUsedMB     int     `json:"mem_used_mb"`
-	DiskUsedGB    int     `json:"disk_used_gb"`
+	CPUPercent float64 `json:"cpu_percent"`
+	MemUsedMB  int     `json:"mem_used_mb"`
+	DiskUsedGB int     `json:"disk_used_gb"`
 }
 
 // Driver is the VMM backend contract — draft/micro-machine.md §4, verbatim
